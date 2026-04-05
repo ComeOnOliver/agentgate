@@ -1,7 +1,7 @@
 {
   "name": "agentgate",
-  "version": "0.1.0",
-  "description": "Let any Node.js project expose capabilities to AI agents in minutes",
+  "version": "0.2.0",
+  "description": "Turn any web app into an agent-accessible API — npm middleware + AI plugin that auto-generates agent APIs",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,0 +1,136 @@
+---
+name: >-
+  {{ project_name }}-agent-api
+description: >-
+  {{ skill_description }}
+---
+
+# {{ project_name }} Agent API
+
+{{ project_description }}
+
+## Authentication
+
+### Register an Agent
+
+To use this API, you need an API key. Registration requires an authenticated user session.
+
+```bash
+curl -X POST {{ base_url }}/agent/register \
+  -H "Content-Type: application/json" \
+  {% if auth_type == "cookie" %}-H "Cookie: {{ cookie_name }}=<session>" \{% endif %}
+  {% if auth_type == "bearer" %}-H "Authorization: Bearer <user-token>" \{% endif %}
+  -d '{
+    "name": "my-agent",
+    "scopes": [{{ default_scopes }}]
+  }'
+```
+
+**Response:**
+```json
+{
+  "agentId": "...",
+  "apiKey": "ag_...",
+  "scopes": [{{ default_scopes }}],
+  "message": "Save this API key — it won't be shown again."
+}
+```
+
+### Using Your API Key
+
+Include the key in all requests:
+
+```bash
+curl {{ base_url }}/agent/actions/<action-name> \
+  -H "Authorization: Bearer ag_..." \
+  -H "Content-Type: application/json" \
+  -d '{"params": { ... }}'
+```
+
+## Discovery
+
+```bash
+# Get the full manifest of available actions
+curl {{ base_url }}/agent/manifest.json
+```
+
+## Available Actions
+
+{% for domain in domains %}
+### {{ domain.name | title }}
+
+{% for action in domain.actions %}
+#### `{{ domain.name }}.{{ action.name }}`
+
+{{ action.description }}
+
+**Scope:** `{{ action.scope }}`
+
+{% if action.params %}
+**Parameters:**
+```json
+{{ action.params | tojson(indent=2) }}
+```
+{% else %}
+**Parameters:** None
+{% endif %}
+
+{% if action.returns %}
+**Returns:**
+```json
+{{ action.returns | tojson(indent=2) }}
+```
+{% endif %}
+
+**Example:**
+```bash
+curl -X POST {{ base_url }}/agent/actions/{{ domain.name }}.{{ action.name }} \
+  -H "Authorization: Bearer ag_..." \
+  -H "Content-Type: application/json" \
+  -d '{"params": {{ action.example_params | tojson }}}'
+```
+
+{% endfor %}
+{% endfor %}
+
+## Key Management
+
+### List Your Keys
+
+```bash
+curl {{ base_url }}/agent/agents \
+  {% if auth_type == "cookie" %}-H "Cookie: {{ cookie_name }}=<session>"{% endif %}
+  {% if auth_type == "bearer" %}-H "Authorization: Bearer <user-token>"{% endif %}
+```
+
+### Revoke a Key
+
+```bash
+curl -X DELETE {{ base_url }}/agent/agents/<agent-id> \
+  {% if auth_type == "cookie" %}-H "Cookie: {{ cookie_name }}=<session>"{% endif %}
+  {% if auth_type == "bearer" %}-H "Authorization: Bearer <user-token>"{% endif %}
+```
+
+## Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `VALIDATION_ERROR` | Invalid request parameters |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 403 | `FORBIDDEN` | Insufficient scopes |
+| 404 | `NOT_FOUND` | Action or resource not found |
+| 429 | `RATE_LIMITED` | Rate limit exceeded (check `Retry-After` header) |
+| 500 | `INTERNAL_ERROR` | Server error |
+
+## Rate Limits
+
+- Default: {{ rate_limit_max }} requests per {{ rate_limit_window }} per API key
+- Registration: {{ register_limit_max }} per {{ register_limit_window }} per user
+- When exceeded, wait for the `Retry-After` header value before retrying
+
+## Health Check
+
+```bash
+curl {{ base_url }}/agent/health
+# Returns: { "status": "ok", "version": "{{ version }}" }
+```

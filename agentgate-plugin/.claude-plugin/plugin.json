@@ -1,0 +1,7 @@
+{
+  "name": "agentgate",
+  "description": "Transform any Node.js web application into an agent-accessible API. Analyzes your project, detects auth system, extracts routes, and generates a complete agent API layer with auth, rate limiting, and manifest.",
+  "author": {
+    "name": "AgentGate contributors"
+  }
+}

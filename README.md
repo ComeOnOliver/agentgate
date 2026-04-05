@@ -1,19 +1,152 @@
 # AgentGate
 
 [![npm version](https://img.shields.io/npm/v/agentgate.svg)](https://www.npmjs.com/package/agentgate)
+[![GitHub stars](https://img.shields.io/github/stars/ComeOnOliver/agentgate.svg)](https://github.com/ComeOnOliver/agentgate/stargazers)
 [![CI](https://github.com/ComeOnOliver/agentgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ComeOnOliver/agentgate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
 
-**Let any Node.js project expose capabilities to AI agents in minutes.**
+**Turn any web app into an agent-accessible API in minutes.**
 
-AgentGate is an Express/Hono-compatible middleware that lets you define agent-accessible actions with Zod schemas, built-in auth, rate limiting, and auto-generated capability manifests.
+AgentGate lets AI agents (Claude, GPT, custom) discover, authenticate, and interact with your application through a standardized protocol. It works two ways: as an **npm middleware** you wire up manually, or as an **AI plugin** that analyzes your project and generates the entire agent API layer automatically.
+
+---
+
+## How It Works
+
+### v2: Plugin — Let an AI Generate Your Agent API
+
+The AgentGate plugin runs as a Claude Code / OpenClaw command. An AI agent analyzes your project's source code — framework, auth system, routes, data models — and generates a complete `agent-api/` directory with authentication, rate limiting, scoped access, and a manifest. No boilerplate.
+
+```
+Your Web App                     AI Agent (Claude Code / OpenClaw)
+     │                                     │
+     └── package.json, routes,             │
+         auth, schema, services ──────────►│
+                                           │ Analyze → Design → Generate
+                                           │
+                                    ┌──────┘
+                                    ▼
+                              agent-api/
+                              ├── index.ts
+                              ├── manifest.ts
+                              ├── actions/
+                              ├── auth/
+                              ├── middleware/
+                              ├── types.ts
+                              ├── SKILL.md
+                              └── tests/
+```
+
+The generated code:
+- **Reuses your existing logic** — calls your services, doesn't rewrite them
+- **Bridges your auth system** — Next-Auth, Better Auth, Passport, JWT, Clerk, Supabase
+- **Is non-destructive** — everything goes in `agent-api/`, nothing existing is modified
+- **Matches your code style** — same formatting, imports, patterns
+
+### v1: npm Library — Wire It Up Yourself
+
+Install `agentgate` as middleware and define actions manually with Zod schemas. Full control, minimal magic. See [npm Library (v1)](#npm-library-v1) below.
+
+---
+
+## Quick Start
+
+### Claude Code (Plugin)
+
+```bash
+# Install the plugin from marketplace
+/plugin marketplace add agentgate
+
+# Generate an agent API for your project
+/agentgate ./my-nextjs-app
+```
+
+The agent will:
+1. Analyze your project (framework, auth, routes, models)
+2. Design actions grouped by domain with scoped access
+3. Generate `agent-api/` with full implementation
+4. Write tests and a SKILL.md
+5. Print integration instructions
+
+### OpenClaw (Skill)
+
+```bash
+# Install the AgentGate skill
+@agentgate build ./my-express-app
+```
+
+### Manual (Read the Harness)
+
+If you're not using Claude Code or OpenClaw, read [`agentgate-plugin/HARNESS.md`](./agentgate-plugin/HARNESS.md) — it's the complete methodology an AI (or a human) follows to generate the agent API. You can follow it step by step.
+
+---
+
+## What Gets Generated
+
+```
+my-app/
+├── agent-api/
+│   ├── index.ts              # Main router — mount at /agent/*
+│   ├── manifest.ts           # Auto-generated manifest.json
+│   ├── actions/
+│   │   ├── index.ts          # Re-exports all action modules
+│   │   ├── projects.ts       # projects.list, projects.create, ...
+│   │   ├── users.ts          # users.get, users.update, ...
+│   │   └── billing.ts        # billing.getInvoices, billing.updatePlan, ...
+│   ├── auth/
+│   │   ├── agent-keys.ts     # API key generate / validate / revoke
+│   │   └── user-bridge.ts    # Bridge to your existing auth system
+│   ├── middleware/
+│   │   ├── authenticate.ts   # Extract + validate agent API key
+│   │   ├── rate-limit.ts     # Sliding window rate limiter
+│   │   └── error-handler.ts  # Standardized JSON error responses
+│   ├── types.ts              # TypeScript types
+│   ├── utils.ts              # Shared utilities
+│   ├── SKILL.md              # AI-readable documentation of all actions
+│   └── tests/
+│       ├── TEST.md           # Test plan
+│       ├── auth.test.ts      # Auth + scope tests
+│       └── actions.test.ts   # Action handler tests
+└── (existing project files — unchanged)
+```
+
+Once generated, agents can:
+
+1. **Discover** capabilities at `GET /agent/manifest.json`
+2. **Register** at `POST /agent/register` (requires user session)
+3. **Invoke** actions at `POST /agent/actions/<name>`
+4. **Manage** keys at `GET /agent/agents` and `DELETE /agent/agents/:id`
+
+---
+
+## Example: ClawStarter
+
+[ClawStarter](https://github.com/ComeOnOliver/clawstarter) — a crowdfunding platform — was AgentGated in a single run. The plugin analyzed 11 API routes across projects, users, and billing, and generated **22 agent actions** with full auth bridging, scoped access, and tests.
+
+```
+clawstarter/agent-api/
+├── actions/
+│   ├── projects.ts    # 8 actions: list, get, create, update, delete, fund, ...
+│   ├── users.ts       # 6 actions: get, update, listProjects, ...
+│   └── billing.ts     # 8 actions: getInvoices, updatePlan, ...
+├── auth/
+│   ├── agent-keys.ts  # ag_ prefixed keys, HMAC-SHA256 hashed
+│   └── user-bridge.ts # Bridges to ClawStarter's Next-Auth setup
+└── SKILL.md           # Full reference for any AI agent to consume
+```
+
+---
+
+## npm Library (v1)
+
+For manual setup without the plugin, install `agentgate` as middleware:
 
 ```bash
 npm install agentgate zod
 ```
 
-## Quick Start
+### Basic Usage
 
 ```ts
 import express from 'express'
@@ -44,18 +177,12 @@ app.use('/agent', gate.express())
 app.listen(3000)
 ```
 
-That's it. Agents can now:
-
-1. **Discover** capabilities at `GET /agent/manifest.json`
-2. **Register** at `POST /agent/register` to get an API key
-3. **Invoke** actions at `POST /agent/actions/todos.list`
-
-## How It Works
+### Agent Flow
 
 ```
 AI Agent (Claude, GPT, etc.)
   │
-  ├── GET  /agent/manifest.json     → Discover what actions are available
+  ├── GET  /agent/manifest.json     → Discover available actions
   ├── POST /agent/register          → Register and get an API key
   ├── POST /agent/actions/:name     → Invoke an action
   └── GET  /agent/health            → Health check
@@ -71,11 +198,9 @@ AI Agent (Claude, GPT, etc.)
 Your Express / Hono App
 ```
 
-## API Reference
+### API Reference
 
-### `new AgentGate(config)`
-
-Create a new gate instance.
+#### `new AgentGate(config)`
 
 ```ts
 const gate = new AgentGate({
@@ -85,6 +210,9 @@ const gate = new AgentGate({
   auth: {
     strategy: 'api-key',    // 'api-key' | 'bearer' | 'none'
     validate: async (token) => { ... }, // Required for 'bearer'
+    userResolver: async (req) => { ... }, // Optional: link agents to users
+    canRegisterAgent: async (user) => boolean, // Optional: restrict registration
+    maxScopes: async (user) => string[], // Optional: limit scopes per user
   },
   rateLimit: {
     window: '1m',           // Time window: '30s', '1m', '1h'
@@ -93,17 +221,15 @@ const gate = new AgentGate({
 })
 ```
 
-### `gate.defineAction(name, definition)`
-
-Register a named action. Returns `this` for chaining.
+#### `gate.defineAction(name, definition)`
 
 ```ts
 gate.defineAction('projects.create', {
-  description: 'Create a new project',        // Required
-  params: z.object({ name: z.string() }),      // Optional: Zod schema
-  returns: z.object({ id: z.string() }),       // Optional: Zod schema
-  scopes: ['write:projects'],                  // Optional: required scopes
-  handler: async (params, ctx) => {            // Required: handler function
+  description: 'Create a new project',
+  params: z.object({ name: z.string() }),
+  returns: z.object({ id: z.string() }),
+  scopes: ['write:projects'],
+  handler: async (params, ctx) => {
     return await db.projects.create({
       ...params,
       ownerId: ctx.agent.id,
@@ -112,9 +238,7 @@ gate.defineAction('projects.create', {
 })
 ```
 
-### `gate.defineNamespace(name, definition)`
-
-Group related actions under a namespace prefix.
+#### `gate.defineNamespace(name, definition)`
 
 ```ts
 gate.defineNamespace('billing', {
@@ -132,118 +256,13 @@ gate.defineNamespace('billing', {
     },
   },
 })
-// Registers: billing.getInvoices, billing.updatePlan
 ```
 
-### `gate.express()`
+#### User-Linked Access Control
 
-Returns an Express middleware function. Mount it on your app:
+Connect agents to your existing auth system — like GitHub Personal Access Tokens:
 
 ```ts
-app.use('/agent', gate.express())
-```
-
-### `gate.manifest()`
-
-Returns the manifest object (useful for testing or custom endpoints):
-
-```ts
-const manifest = gate.manifest()
-// { name, version, protocol, auth, actions: [...] }
-```
-
-### Handler Context
-
-Every action handler receives `(params, ctx)`:
-
-```ts
-interface AgentContext {
-  agent: {
-    id: string                      // Agent's unique ID
-    name: string                    // Agent's registered name
-    scopes: string[]                // Agent's granted scopes
-    metadata: Record<string, unknown>
-  }
-  user?: {                          // Present when userResolver is configured
-    id: string                      // User ID from your auth system
-  }
-  requestId: string                 // Unique request ID
-  timestamp: Date                   // Request timestamp
-}
-```
-
-## Authentication
-
-### API Key (default)
-
-Agents register via `POST /agent/register` and receive a key prefixed with `ag_`.
-
-```bash
-# Register
-curl -X POST http://localhost:3000/agent/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-agent", "scopes": ["read:todos"]}'
-
-# Response: { "agentId": "...", "apiKey": "ag_...", "scopes": ["read:todos"] }
-
-# Use the key
-curl -X POST http://localhost:3000/agent/actions/todos.list \
-  -H "Authorization: Bearer ag_..." \
-  -H "Content-Type: application/json" \
-  -d '{"params": {}}'
-```
-
-### Bearer Token
-
-Bring your own validation (JWT, OAuth2, etc.):
-
-```ts
-const gate = new AgentGate({
-  name: 'my-app',
-  version: '1.0.0',
-  auth: {
-    strategy: 'bearer',
-    validate: async (token) => {
-      const payload = await verifyJWT(token)
-      return {
-        id: payload.sub,
-        name: payload.name,
-        scopes: payload.scopes,
-        metadata: {},
-      }
-    },
-  },
-})
-```
-
-### No Auth
-
-For development or internal services:
-
-```ts
-const gate = new AgentGate({
-  name: 'my-app',
-  version: '1.0.0',
-  // No auth config = no auth required
-})
-```
-
-## Connecting to Your Auth System
-
-By default, anyone can call `POST /register` and get an API key. For production use, you should connect AgentGate to your project's existing auth system using `userResolver`. This makes agents **user-linked** — like GitHub Personal Access Tokens.
-
-### How It Works
-
-1. User authenticates via your app's auth (Auth.js, session, JWT, etc.)
-2. Authenticated user creates agents with limited scopes
-3. Agent API key inherits max permissions from the user
-
-### Auth.js / NextAuth Example
-
-```ts
-import { getServerSession } from 'next-auth'
-import { AgentGate } from 'agentgate'
-
 const gate = new AgentGate({
   name: 'my-saas',
   version: '1.0.0',
@@ -252,15 +271,8 @@ const gate = new AgentGate({
     userResolver: async (req) => {
       const session = await getServerSession(req)
       if (!session?.user) return null
-      return {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-      }
+      return { id: session.user.id, email: session.user.email }
     },
-    // Optional: only verified emails can create agents
-    canRegisterAgent: async (user) => !!user.email,
-    // Optional: limit scopes based on user role
     maxScopes: async (user) => {
       if (user.roles?.includes('admin')) return ['*']
       return ['read:projects', 'read:users']
@@ -269,68 +281,31 @@ const gate = new AgentGate({
 })
 ```
 
-### Custom JWT Example
+### Handler Context
 
 ```ts
-const gate = new AgentGate({
-  name: 'my-app',
-  version: '1.0.0',
-  auth: {
-    strategy: 'api-key',
-    userResolver: async (req) => {
-      const token = req.headers['authorization']?.split(' ')[1]
-      if (!token) return null
-      const user = await verifyJWT(token)
-      return user ? { id: user.sub, email: user.email } : null
-    },
-  },
-})
+interface AgentContext {
+  agent: {
+    id: string
+    name: string
+    scopes: string[]
+    metadata: Record<string, unknown>
+  }
+  user?: { id: string }
+  requestId: string
+  timestamp: Date
+}
 ```
 
-### Configuration Options
+### Authentication Strategies
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `userResolver` | `(req) => Promise<UserIdentity \| null>` | Resolve the current user from your auth system. When configured, registration requires an authenticated user. |
-| `canRegisterAgent` | `(user) => Promise<boolean>` | Optional. Restrict which users can create agents. |
-| `maxScopes` | `(user) => Promise<string[]>` | Optional. Limit scopes per user. Return `['*']` for full access. |
+| Strategy | Description |
+|----------|-------------|
+| `api-key` | Agents register via `/agent/register`, receive `ag_` prefixed keys |
+| `bearer` | Bring your own validation (JWT, OAuth2, etc.) |
+| `none` | No auth — for development or internal services |
 
-### Management Endpoints
-
-When `userResolver` is configured, two additional endpoints become available:
-
-```bash
-# List my agents
-curl http://localhost:3000/agent/agents \
-  -H "Cookie: session=..." # or whatever your auth uses
-
-# Revoke one of my agents
-curl -X DELETE http://localhost:3000/agent/agents/<agentId> \
-  -H "Cookie: session=..."
-```
-
-Users can only list and revoke their own agents.
-
-## Rate Limiting
-
-Built-in sliding window rate limiter (in-memory):
-
-```ts
-const gate = new AgentGate({
-  name: 'my-app',
-  version: '1.0.0',
-  rateLimit: {
-    window: '1m',  // '30s', '1m', '5m', '1h'
-    max: 60,       // requests per window per agent
-  },
-})
-```
-
-When exceeded, returns `429` with a `Retry-After` header.
-
-## Error Handling
-
-AgentGate returns structured JSON errors:
+### Error Responses
 
 ```json
 {
@@ -351,57 +326,32 @@ AgentGate returns structured JSON errors:
 | 429 | `RATE_LIMIT_EXCEEDED` | Too many requests |
 | 500 | `INTERNAL_ERROR` | Unexpected server error |
 
-You can import and use error classes directly:
-
-```ts
-import { ValidationError, AuthError, NotFoundError } from 'agentgate'
-```
-
-## Manifest Format
-
-The auto-generated manifest at `/agent/manifest.json`:
+### Manifest Format
 
 ```json
 {
   "name": "my-app",
   "version": "1.0.0",
-  "description": "My application",
   "protocol": "agentgate/1.0",
-  "auth": {
-    "schemes": ["api-key"],
-    "registration": "/register"
-  },
+  "auth": { "schemes": ["api-key"], "registration": "/register" },
   "actions": [
     {
       "name": "todos.list",
       "description": "List all todos",
-      "params": {
-        "type": "object",
-        "properties": {
-          "completed": { "type": "boolean" }
-        }
-      },
-      "returns": {
-        "type": "array",
-        "items": { "type": "object", "properties": { ... } }
-      },
+      "params": { "type": "object", "properties": { ... } },
       "scopes": ["read:todos"]
     }
   ]
 }
 ```
 
-Params and returns use standard JSON Schema (auto-converted from your Zod schemas).
+### MCP Compatibility
 
-## MCP Compatibility
+AgentGate's manifest format is a superset of [MCP](https://modelcontextprotocol.io/)'s tool definition format. JSON Schema output for params/returns is compatible with MCP tool schemas.
 
-AgentGate's manifest format is designed as a superset of [MCP](https://modelcontextprotocol.io/)'s tool definition format. The JSON Schema output for params/returns is compatible with MCP tool schemas, making it straightforward for MCP-aware agents to consume AgentGate endpoints.
-
-Full MCP transport compatibility (SSE, stdio) is planned for v0.2.0.
+---
 
 ## Examples
-
-See the [`examples/`](./examples) directory:
 
 - **[express-basic](./examples/express-basic)** — Minimal todo app with API key auth
 

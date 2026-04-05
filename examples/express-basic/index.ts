@@ -1,14 +1,39 @@
 import express from "express";
 import { z } from "zod";
 import { AgentGate } from "agentgate";
+import type { GateRequest } from "agentgate";
 
-// 1. Create a gate
+// 1. Create a gate with user-linked agents
 const gate = new AgentGate({
 	name: "todo-app",
 	version: "1.0.0",
 	description: "A simple todo application with agent access",
-	auth: { strategy: "api-key" },
 	rateLimit: { window: "1m", max: 60 },
+	auth: {
+		strategy: "api-key",
+
+		// Connect to your auth system — this example uses a simple header-based approach.
+		// In production, replace this with your real auth (Auth.js, JWT, session, etc.)
+		userResolver: async (req: GateRequest) => {
+			const userId = req.headers["x-user-id"];
+			if (!userId) return null;
+			return {
+				id: userId,
+				email: req.headers["x-user-email"] ?? undefined,
+				name: req.headers["x-user-name"] ?? undefined,
+			};
+		},
+
+		// Optional: restrict who can register agents
+		canRegisterAgent: async (user) => {
+			return !!user.email; // must have an email
+		},
+
+		// Optional: limit scopes based on user
+		maxScopes: async (_user) => {
+			return ["read:todos", "write:todos"]; // all users get full todo access
+		},
+	},
 });
 
 // 2. Define some in-memory data
@@ -84,4 +109,5 @@ app.listen(PORT, () => {
 	console.log(`Todo app listening on http://localhost:${PORT}`);
 	console.log(`Agent manifest: http://localhost:${PORT}/agent/manifest.json`);
 	console.log(`Register agent: POST http://localhost:${PORT}/agent/register`);
+	console.log(`  (requires X-User-Id and X-User-Email headers)`);
 });

@@ -1,9 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
-import type { AgentIdentity } from "../types.js";
+import type { AgentIdentity, UserIdentity } from "../types.js";
 import type { AuthStrategy, RegistrationRequest, RegistrationResponse } from "./types.js";
 
 interface StoredAgent {
 	id: string;
+	userId: string;
+	userName?: string;
+	userEmail?: string;
 	name: string;
 	apiKey: string;
 	scopes: string[];
@@ -38,8 +41,13 @@ export class ApiKeyAuth implements AuthStrategy {
 	 * Register a new agent and return its API key.
 	 * @param request - Registration details
 	 * @param allowedScopes - Scopes the gate permits; requested scopes are intersected with these
+	 * @param user - The authenticated user creating this agent
 	 */
-	register(request: RegistrationRequest, allowedScopes?: string[]): RegistrationResponse {
+	register(
+		request: RegistrationRequest,
+		allowedScopes?: string[],
+		user?: UserIdentity,
+	): RegistrationResponse {
 		const id = uuidv4();
 		const apiKey = `ag_${uuidv4().replace(/-/g, "")}`;
 
@@ -50,6 +58,9 @@ export class ApiKeyAuth implements AuthStrategy {
 
 		const agent: StoredAgent = {
 			id,
+			userId: user?.id ?? "anonymous",
+			userName: user?.name ?? undefined,
+			userEmail: user?.email ?? undefined,
 			name: request.name,
 			apiKey,
 			scopes,
@@ -67,8 +78,29 @@ export class ApiKeyAuth implements AuthStrategy {
 		return this.agents.delete(agentId);
 	}
 
+	/** Revoke an agent only if it belongs to the given user */
+	revokeByUser(agentId: string, userId: string): boolean {
+		const agent = this.agents.get(agentId);
+		if (!agent || agent.userId !== userId) {
+			return false;
+		}
+		return this.agents.delete(agentId);
+	}
+
 	/** List all registered agents (without keys) */
 	list(): Array<Omit<StoredAgent, "apiKey">> {
 		return Array.from(this.agents.values()).map(({ apiKey: _, ...rest }) => rest);
+	}
+
+	/** List agents belonging to a specific user (without keys) */
+	listByUser(userId: string): Array<Omit<StoredAgent, "apiKey">> {
+		return Array.from(this.agents.values())
+			.filter((agent) => agent.userId === userId)
+			.map(({ apiKey: _, ...rest }) => rest);
+	}
+
+	/** Look up which user owns an agent */
+	getAgentUserId(agentId: string): string | null {
+		return this.agents.get(agentId)?.userId ?? null;
 	}
 }

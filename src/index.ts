@@ -4,9 +4,11 @@ export { AgentGate } from "./gate.js";
 // Types
 export type {
 	GateConfig,
+	GateRequest,
 	AuthConfig,
 	RateLimitConfig,
 	AgentIdentity,
+	UserIdentity,
 	AgentContext,
 	ActionDefinition,
 	NamespaceDefinition,

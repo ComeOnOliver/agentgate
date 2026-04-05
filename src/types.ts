@@ -1,5 +1,13 @@
 import type { z } from "zod";
 
+/** Framework-agnostic request representation */
+export interface GateRequest {
+	method: string;
+	path: string;
+	body?: unknown;
+	headers: Record<string, string | undefined>;
+}
+
 /** Metadata about the gate instance */
 export interface GateConfig {
 	name: string;
@@ -15,6 +23,15 @@ export interface AuthConfig {
 	strategy: "api-key" | "bearer" | "none";
 	/** Custom token validation function for bearer strategy */
 	validate?: (token: string) => Promise<AgentIdentity | null>;
+
+	/** Resolve the current user from the host project's auth system */
+	userResolver?: (req: GateRequest) => Promise<UserIdentity | null>;
+
+	/** Optional — restrict who can register agents */
+	canRegisterAgent?: (user: UserIdentity) => Promise<boolean>;
+
+	/** Optional — restrict max scopes per user */
+	maxScopes?: (user: UserIdentity) => Promise<string[]>;
 }
 
 /** Rate limit configuration */
@@ -23,6 +40,15 @@ export interface RateLimitConfig {
 	window: string;
 	/** Max requests per window */
 	max: number;
+}
+
+/** Identity of the authenticated user from the host project */
+export interface UserIdentity {
+	id: string;
+	email?: string;
+	name?: string;
+	roles?: string[];
+	metadata?: Record<string, unknown>;
 }
 
 /** Identity of the authenticated agent */
@@ -36,6 +62,7 @@ export interface AgentIdentity {
 /** Context passed to action handlers */
 export interface AgentContext {
 	agent: AgentIdentity;
+	user?: UserIdentity;
 	requestId: string;
 	timestamp: Date;
 }

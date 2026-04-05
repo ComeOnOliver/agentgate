@@ -164,6 +164,9 @@ interface AgentContext {
     scopes: string[]                // Agent's granted scopes
     metadata: Record<string, unknown>
   }
+  user?: {                          // Present when userResolver is configured
+    id: string                      // User ID from your auth system
+  }
   requestId: string                 // Unique request ID
   timestamp: Date                   // Request timestamp
 }
@@ -224,6 +227,89 @@ const gate = new AgentGate({
   // No auth config = no auth required
 })
 ```
+
+## Connecting to Your Auth System
+
+By default, anyone can call `POST /register` and get an API key. For production use, you should connect AgentGate to your project's existing auth system using `userResolver`. This makes agents **user-linked** — like GitHub Personal Access Tokens.
+
+### How It Works
+
+1. User authenticates via your app's auth (Auth.js, session, JWT, etc.)
+2. Authenticated user creates agents with limited scopes
+3. Agent API key inherits max permissions from the user
+
+### Auth.js / NextAuth Example
+
+```ts
+import { getServerSession } from 'next-auth'
+import { AgentGate } from 'agentgate'
+
+const gate = new AgentGate({
+  name: 'my-saas',
+  version: '1.0.0',
+  auth: {
+    strategy: 'api-key',
+    userResolver: async (req) => {
+      const session = await getServerSession(req)
+      if (!session?.user) return null
+      return {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+      }
+    },
+    // Optional: only verified emails can create agents
+    canRegisterAgent: async (user) => !!user.email,
+    // Optional: limit scopes based on user role
+    maxScopes: async (user) => {
+      if (user.roles?.includes('admin')) return ['*']
+      return ['read:projects', 'read:users']
+    },
+  },
+})
+```
+
+### Custom JWT Example
+
+```ts
+const gate = new AgentGate({
+  name: 'my-app',
+  version: '1.0.0',
+  auth: {
+    strategy: 'api-key',
+    userResolver: async (req) => {
+      const token = req.headers['authorization']?.split(' ')[1]
+      if (!token) return null
+      const user = await verifyJWT(token)
+      return user ? { id: user.sub, email: user.email } : null
+    },
+  },
+})
+```
+
+### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `userResolver` | `(req) => Promise<UserIdentity \| null>` | Resolve the current user from your auth system. When configured, registration requires an authenticated user. |
+| `canRegisterAgent` | `(user) => Promise<boolean>` | Optional. Restrict which users can create agents. |
+| `maxScopes` | `(user) => Promise<string[]>` | Optional. Limit scopes per user. Return `['*']` for full access. |
+
+### Management Endpoints
+
+When `userResolver` is configured, two additional endpoints become available:
+
+```bash
+# List my agents
+curl http://localhost:3000/agent/agents \
+  -H "Cookie: session=..." # or whatever your auth uses
+
+# Revoke one of my agents
+curl -X DELETE http://localhost:3000/agent/agents/<agentId> \
+  -H "Cookie: session=..."
+```
+
+Users can only list and revoke their own agents.
 
 ## Rate Limiting
 
